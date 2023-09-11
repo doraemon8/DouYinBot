@@ -1,17 +1,23 @@
-import asyncio
+from configparser import ConfigParser
 
-from barrage import DYBarrageBuilder
-
-url = "https://live.douyin.com/639709145929"
+from bot import CocoBot, CocoBotHook
 
 
-def callback(message):
-    print(message)
+class Hook(CocoBotHook):
+    async def onConsume(self, text: str, emotion: dict, wav_byte: bytes):
+        pass
+
+    async def onSing(self, name: str, vocals_byte: bytes, wav_byte: bytes):
+        pass
+
+
+config = ConfigParser()
+config.read('config.ini', encoding="utf-8")
+chatbot = CocoBot(config)
+chatbot.bind(Hook())
 
 
 
 
 if __name__ == '__main__':
-    barrage = DYBarrageBuilder().port(8080).page(url).on(callback).build()
-    barrage.daemon=True
-    barrage.start()
+    chatbot.chat("你好")
