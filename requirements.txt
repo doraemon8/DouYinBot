@@ -1,0 +1,17 @@
+librosa~=0.10.0.post2
+torch~=2.0.1
+numpy~=1.24.4
+fairseq~=0.12.2
+scipy~=1.11.1
+jieba~=0.42.1
+cn2an~=0.5.19
+pypinyin~=0.49.0
+soundfile~=0.12.1
+requests~=2.31.0
+aiohttp~=3.8.4
+pydub~=0.25.1
+tqdm~=4.65.0
+uvicorn~=0.22.0
+fastapi~=0.95.2
+httpx~=0.19.0
+openaiauth~=2.0.0
