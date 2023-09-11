@@ -181,6 +181,7 @@ class CocoBot:
         self.free = 0.1
         self.hook = None
         self.lock = threading.Lock()
+        self.audio_queue = Queue()
 
         # 聊天功能依赖加载
         self.tts = TTSBot(config.get("tts", "path"), config.get("tts", "config"), config.get("tts", "name"))
@@ -194,7 +195,7 @@ class CocoBot:
                 conversation_id=config.get("chatgpt", "conversation_id"))
         # 这里不能用异步队列，因为每个线程的事件循环不一样
         self.text_queue = Queue()
-        self.audio_queue = Queue()
+
 
         # 情绪
         self.emotion = Emotion()
@@ -206,7 +207,6 @@ class CocoBot:
             self.music_dir = config.get("vc", "music")
             self.music_dir2 = config.get("vc", "music2")
             self.vc = VCBot(config.get("vc", "path"), config.get("vc", "index"), config.get("vc", "hubert"))
-            self.sing_queue = Queue()
             self.slice_num = 30
             self._init_dir()
 
@@ -275,7 +275,7 @@ class CocoBot:
                 wav_byte = self.tts.infer(text)
                 run_async_func(self.hook.onSpeech, text)
                 logger.info("推理用时>>{}".format(time.time() - start))
-                data = {"text": text, "wav_byte": wav_byte}
+                data = {"type": "chat", "text": text, "wav_byte": wav_byte}
                 self.audio_queue.put(data)
         self.audio_queue.put(self.sign)
         run_async_func(self.hook.onSpeechDown)
@@ -287,9 +287,12 @@ class CocoBot:
                 data = self.audio_queue.get()
                 if not isinstance(data, dict):
                     break
-                emotion = self.emotion.infer(data["text"])
-                run_async_func(self.hook.onConsume, data["text"], emotion, data["wav_byte"])
-        self.switch(Status.ONE)
+                mtype = data["type"]
+                if mtype == "chat":
+                    emotion = self.emotion.infer(data["text"])
+                    run_async_func(self.hook.onConsume, data["text"], emotion, data["wav_byte"])
+                elif mtype == "sing":
+                    run_async_func(self.hook.onSing, data["title"], data["vocals_byte"], data["wav_byte"])
         run_async_func(self.hook.onConsumeDown)
 
     def sing(self, name: str):
@@ -305,7 +308,7 @@ class CocoBot:
         music = code + ".wav"
         data = {"title": title, "link": link, "code": code, "has": music in music_list}
         sing_generation_task = threading.Thread(target=self._sing_generation, args=(data,))
-        sing_consume_task = threading.Thread(target=self._sing_consume)
+        sing_consume_task = threading.Thread(target=self._audio_consume)
         sing_consume_task.start()
         sing_generation_task.start()
         self.switch(Status.FOUR)
@@ -352,12 +355,11 @@ class CocoBot:
                         wav
                     )
                     wav_byte = wav_to_bytes(wav)
-                    data = {"title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
-                    self.sing_queue.put(data)
+                    data = {"type":"sing", "title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
+                    self.audio_queue.put(data)
                 for i in range(len(wav_list)):
                     task(f'{i}.wav')
-                if self.vc.isGPU:
-                    self.sing_queue.put(self.sign)
+                self.audio_queue.put(self.sign)
                 print("准备合成音频")
                 wav_path = os.path.join(self.temp_dir, f'{sing["code"]}.wav')
                 concat_wav_slices(wavs, wav_path)
@@ -390,24 +392,13 @@ class CocoBot:
             vocals_byte = wav_to_bytes(vocals)
             wav = os.path.join(self.temp2_dir, name)
             wav_byte = wav_to_bytes(wav)
-            data = {"title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
-            self.sing_queue.put(data)
-        self.sing_queue.put(self.sign)
+            data = {"type": "sing","title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
+            self.audio_queue.put(data)
+        self.audio_queue.put(self.sign)
         self.__clear_temp_dir()
 
     def _sing_generation(self, sing: dict):
         self.__slice_send_music(sing) if sing["has"] else self.__singing_voice_synthesis(sing)
-
-    def _sing_consume(self):
-        while True:
-            time.sleep(self.free)
-            if not self.sing_queue.empty():
-                data = self.sing_queue.get()
-                if not isinstance(data, dict):
-                    break
-                run_async_func(self.hook.onSing, data["title"], data["vocals_byte"], data["wav_byte"])
-        self.switch(Status.ONE)
-        run_async_func(self.hook.onConsumeDown)
 
     def __clear_temp_dir(self):
         temp_list = os.listdir(self.temp_dir)

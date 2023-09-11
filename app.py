@@ -8,7 +8,7 @@ from fastapi import FastAPI, WebSocket
 
 from logger import logger
 from utils import TimeUtil
-from bot import CocoBotHook, CocoBot
+from bot import CocoBotHook, CocoBot, Status
 
 app = FastAPI()
 
@@ -83,7 +83,7 @@ class Hook(CocoBotHook):
     async def onConsumeDown(self):
         try:
             await bot_websocket.send_text("1001")
-            print("播放完成")
+            print("音频传输完成")
         except AssertionError:
             pass
 
@@ -92,6 +92,12 @@ class Hook(CocoBotHook):
 async def startup():
     global chatbot
     chatbot = CocoBot(config).bind(Hook())
+
+
+@app.get("/ok")
+async def play_ok():
+    chatbot.switch(Status.ONE)
+    print("客户端音乐播放完成")
 
 
 @app.websocket("/live")
