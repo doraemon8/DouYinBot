@@ -87,6 +87,12 @@ class Hook(CocoBotHook):
         except AssertionError:
             pass
 
+    async def onTextDown(self, text: str):
+        try:
+            await live_websocket.send_text(text)
+        except AssertionError:
+            pass
+
 
 @app.on_event("startup")
 async def startup():
