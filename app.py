@@ -102,7 +102,7 @@ async def startup():
 
 @app.get("/ok")
 async def play_ok():
-    chatbot.free()
+    chatbot.to_free()
     print("客户端音乐播放完成")
 
 

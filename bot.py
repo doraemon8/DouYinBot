@@ -240,7 +240,7 @@ class CocoBot:
             run_async_func(self.hook.onStart, Action.CHAT)
             return True
 
-    def free(self):
+    def to_free(self):
         self._switch(Status.ONE)
 
     def speak(self, text):
