@@ -1,5 +1,4 @@
 import asyncio
-import concurrent
 import os
 import pathlib
 import pickle
@@ -15,7 +14,7 @@ from queue import Queue
 import jieba
 from pydub import AudioSegment
 
-from chatgpt import Chatbot
+from chatgpt.v1 import Chatbot
 from logger import logger
 from music import slice_wav_file, download, get_music_mp3_url, generate_unique_code, wav_to_bytes, concat_wav_slices
 from vc import VCBot
@@ -171,8 +170,6 @@ def combined_wav(accompaniment: str, vocal: str, out_wav: str):
     combined.export(out_wav, format="wav")
 
 
-
-
 class CocoBot:
 
     def __init__(self, config: ConfigParser):
@@ -180,6 +177,7 @@ class CocoBot:
         self.status = Status.ONE
         self.free = 0.1
         self.hook = None
+        self.running = False
         self.lock = threading.Lock()
         self.audio_queue = Queue()
 
@@ -195,7 +193,6 @@ class CocoBot:
                 conversation_id=config.get("chatgpt", "conversation_id"))
         # 这里不能用异步队列，因为每个线程的事件循环不一样
         self.text_queue = Queue()
-
 
         # 情绪
         self.emotion = Emotion()
@@ -224,7 +221,7 @@ class CocoBot:
         self.hook = hook
         return self
 
-    def switch(self, status: Status):
+    def _switch(self, status: Status):
         with self.lock:
             self.status = status
 
@@ -239,9 +236,21 @@ class CocoBot:
             text_generation_task.start()
             speech_generation_task.start()
             audio_consume_task.start()
-            self.switch(Status.TWO)
+            self._switch(Status.TWO)
             run_async_func(self.hook.onStart, Action.CHAT)
             return True
+
+    def free(self):
+        self._switch(Status.ONE)
+
+    def speak(self, text):
+        # 阻塞直到机器空闲执行完任务为止
+        while self.status != Status.ONE:
+            time.sleep(self.free)
+        self._switch(Status.THREE)
+        emotion = self.emotion.infer(text)
+        wav_byte = self.tts.infer(text)
+        run_async_func(self.hook.onConsume, text, emotion, wav_byte)
 
     def _text_generation(self, prompt):
         print(f"start to text {prompt}")
@@ -260,7 +269,7 @@ class CocoBot:
                 sentence = ""
                 run_async_func(self.hook.onText, sentence)
         self.text_queue.put(self.sign)
-        self.switch(Status.THREE)
+        self._switch(Status.THREE)
         run_async_func(self.hook.onTextDown, prev_text)
 
     def _speech_generation(self):
@@ -311,7 +320,7 @@ class CocoBot:
         sing_consume_task = threading.Thread(target=self._audio_consume)
         sing_consume_task.start()
         sing_generation_task.start()
-        self.switch(Status.FOUR)
+        self._switch(Status.FOUR)
         run_async_func(self.hook.onStart, Action.SING)
         return True
 
@@ -355,8 +364,9 @@ class CocoBot:
                         wav
                     )
                     wav_byte = wav_to_bytes(wav)
-                    data = {"type":"sing", "title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
+                    data = {"type": "sing", "title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
                     self.audio_queue.put(data)
+
                 for i in range(len(wav_list)):
                     task(f'{i}.wav')
                 self.audio_queue.put(self.sign)
@@ -392,7 +402,7 @@ class CocoBot:
             vocals_byte = wav_to_bytes(vocals)
             wav = os.path.join(self.temp2_dir, name)
             wav_byte = wav_to_bytes(wav)
-            data = {"type": "sing","title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
+            data = {"type": "sing", "title": sing["title"], "wav_byte": wav_byte, "vocals_byte": vocals_byte}
             self.audio_queue.put(data)
         self.audio_queue.put(self.sign)
         self.__clear_temp_dir()

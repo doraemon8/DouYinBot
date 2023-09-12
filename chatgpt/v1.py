@@ -109,7 +109,7 @@ def logger(is_timed: bool):
     return decorator
 
 
-BASE_URL = environ.get("CHATGPT_BASE_URL", "https://bypass.churchless.tech/")
+BASE_URL = environ.get("CHATGPT_BASE_URL", "http://20.55.80.86:9090/api/")
 
 bcolors = t.Colors()
 
@@ -143,7 +143,7 @@ def captcha_solver(images: list[str], challenge_details: dict) -> int:
         return index
 
 
-CAPTCHA_URL = getenv("CAPTCHA_URL", "https://bypass.churchless.tech/captcha/")
+CAPTCHA_URL = getenv("CAPTCHA_URL", "http://20.55.80.86:9090/captcha/")
 
 
 def get_arkose_token(

@@ -60,14 +60,14 @@ class Hook(CocoBotHook):
 
     async def noSing(self, name: str):
         try:
-            await bot_websocket.send_text(f"1002|抱歉！没有找到音频{name}")
+            await live_websocket.send_text(f"抱歉！没有找到音频{name}")
         except AssertionError:
             pass
 
     async def onLoadSing(self, name: str):
         print("开始加载音频")
         try:
-            await bot_websocket.send_text(f"1003|正在加载{name}，预估时间：30s")
+            await live_websocket.send_text(f"正在加载{name}，请骚等片刻")
         except AssertionError:
             pass
 
@@ -96,7 +96,7 @@ async def startup():
 
 @app.get("/ok")
 async def play_ok():
-    chatbot.switch(Status.ONE)
+    chatbot.free()
     print("客户端音乐播放完成")
 
 
@@ -143,6 +143,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 chatbot.sing(message[3:])
             else:
                 chatbot.chat(message)
+        elif action == "speak":
+            chatbot.speak(message["content"])
 
 
 if __name__ == "__main__":

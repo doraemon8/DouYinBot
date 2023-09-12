@@ -1,2 +1,2 @@
-from .chatbot import Chatbot
-from .chatbot import AsyncChatbot
+from .v1 import Chatbot
+from .v1 import AsyncChatbot
